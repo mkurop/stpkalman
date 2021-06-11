@@ -1,6 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import os
+import shutil
+from typing import Tuple
+
+import numpy as np
+import spectrum
+from scipy.io import wavfile
+
+
 class Utils:
 
     def __init__(self, ar_model_order):
@@ -89,7 +98,7 @@ class Utils:
 
         if self.results['windowed_signal_frame'] is None:
 
-            self.results['windowed_signal_frame'][:self.frame] = self.fr() * self.window()
+            self.results['windowed_signal_frame'] = self.fr() * self.window()
 
         else:
 
@@ -137,69 +146,44 @@ class Utils:
 
         return self.results['var_lpc']
 
-def load_wave(wavfile, tsr = 16000.):
+def load_wav(file_ : str) -> Tuple[np.ndarray,int]:
 
-    """Function reading in the audio file. Handling many audio files types
-    (all provided by the sndfile C library, which have to be installed independently)
+    if not os.path.exists(file_):
+        raise ValueError(f"The file {file_} does not exist.")
 
-    :param wavfile: path to the audio file
-    :type wavfile: basestring
-    :param tsr: sampling rate in Hz, if the audio file sr differs resampling is performed
-    :type tsr: float/int
+    sr, s = wavfile.read(file_)
 
-    :return:
-                 * **r** (`numpy vector of floats`) audio file samples
-                 * **tsr** (`float/int`) sampling rate
+    s = s/2.**15
+    
 
-    """
+    np.random.seed(1000) # causes the dither is same on each run
+
+    s += np.random.randn(*s.shape)*1.e-6 # add dither to improve numerical behaviour
+
+    return s, int(sr)
+
+def save_wav(signal : np.ndarray, sampling_rate : int, file_name : str):
+
+    if not os.path.exists(os.path.dirname(file_name)):
+        try:
+            os.makedirs(os.path.dirname(file_name))
+        except OSError:
+            print(f'Can not create the directory {os.path.dirname(file_name)}')
+        else:
+            print(f'Path {os.path.dirname(file_name)} succesfully created.')
+
+    wavfile.write(file_name, sampling_rate, np.int16(signal*2**15))
 
 
+def clear_output_directory():
 
-    # load wave to process
-
-    f = scikits.audiolab.Sndfile(wavfile, "r")
-
-    if f.channels > 1:
-
-        print("No multichanel data supported, program exits ...")
-
-        sys.exit(0)
-
-    sr = f.samplerate
-
-    nf = f.nframes
-
-    r = f.read_frames(nf, dtype=np.float32)
-
-    if sr != tsr:
-
-        r = resample(r,tsr/float(sr),'sinc_best')
-
-    return r, tsr
-
-def save_wave(wavfile, smpls, sr = 16000, format='wav'):
-
-    """Function writes audiosamples to file
-
-    :param wavfile: file name
-    :type wavfile: basestring
-    :param smpls: the samples
-    :type smpls: numpy vector of floats
-    :param sr: sampling rate in Hz
-    :type sr: float/int
-    :param format: format of the output file, wav is the Microsoft WAV
-    :type format: basestring
-
-    :returns: nothing
-
-    """
-
-    format = scikits.audiolab.Format(format)
-
-    f = scikits.audiolab.Sndfile(wavfile, 'w', format, 1, sr)
-
-    f.write_frames(smpls)
-
-    f.close()
-
-        
+    if os.path.exists('../data/output/'): 
+        if len(os.listdir('../data/output/')) > 0:
+            shutil.rmtree('../data/output') 
+    else: 
+        try:
+            os.makedirs('../data/output/')
+        except OSError:
+            print("Creation of ../data/output/ failed")
+        else:
+            print("Successfully created the directory ../data/output/")

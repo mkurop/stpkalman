@@ -1,16 +1,26 @@
-
-fbemodule = '../densefbe/fbe.py'
-celpmodule = '../nsereduction/decoder.py'
 import numpy as np
 import os
 import sys
 
-sys.path.append(os.path.dirname(os.path.expanduser(fbemodule)))
-sys.path.append(os.path.dirname(os.path.expanduser(celpmodule)))
+import utils as fbe
+from numba import int32, float32, deferred_type
+from numba.experimental import jitclass
+  
+spec_error_covariance_matrix = [
+    ('p', int32),
+    ('q', int32),
+    ('mqq', float32[:,:]),
+    ('mqp', float32[:,:]),
+    ('mpq', float32[:,:]),
+    ('mpp', float32[:,:]),
+    ('oqq', int32[:]),
+    ('oqp', int32[:]),
+    ('opq', int32[:]),
+    ('opp', int32[:]),
+]
 
-import fbe
-import decoder
 
+@jitclass(spec_error_covariance_matrix)
 class ErrorCovarianceMatrix:
 
     def __init__(self,p,q):
@@ -21,15 +31,15 @@ class ErrorCovarianceMatrix:
 
         # initialize matrices
 
-        self.mqq = np.zeros((q,q))
-        self.mqp = np.zeros((q,p))
-        self.mpq = np.zeros((p,q))
-        self.mpp = np.zeros((p,p))
+        self.mqq = np.zeros((q,q), dtype=np.float32)
+        self.mqp = np.zeros((q,p), dtype=np.float32)
+        self.mpq = np.zeros((p,q), dtype=np.float32)
+        self.mpp = np.zeros((p,p), dtype=np.float32)
 
-        self.oqq = [0,0]
-        self.oqp = [0,0]
-        self.opq = [0,0]
-        self.opp = [0,0]
+        self.oqq = np.asarray([0,0], dtype=np.int32)
+        self.oqp = np.asarray([0,0], dtype=np.int32)
+        self.opq = np.asarray([0,0], dtype=np.int32)
+        self.opp = np.asarray([0,0], dtype=np.int32)
 
     def getqq(self,i,j):
 
@@ -65,14 +75,14 @@ class ErrorCovarianceMatrix:
 
     def setC(self,C):
 
-        self.mqq = C[:self.q,:self.q]
-        self.mqp = C[:self.q,self.q:]
-        self.mpq = C[self.q:,:self.q]
-        self.mpp = C[self.q:,self.q:]
+        self.mqq = np.float32(C[:self.q,:self.q])
+        self.mqp = np.float32(C[:self.q,self.q:])
+        self.mpq = np.float32(C[self.q:,:self.q])
+        self.mpp = np.float32(C[self.q:,self.q:])
 
     def get(self):
 
-        C = np.zeros((self.q+self.p,self.q+self.p))
+        C = np.zeros((self.q+self.p,self.q+self.p), dtype=np.float32)
 
         for i in range(self.q):
             for j in range(self.q):
@@ -220,7 +230,7 @@ class ErrorCovarianceMatrix:
 
     def gain(self):
 
-        g = np.zeros((self.p+self.q,1))
+        g = np.zeros((self.p+self.q,), np.float32)
 
         for i in range(self.q):
 
@@ -236,10 +246,10 @@ class ErrorCovarianceMatrix:
 
     def update(self,gain):
 
-        auxqq = np.zeros((self.q,self.q))
-        auxqp = np.zeros((self.q,self.p))
-        auxpq = np.zeros((self.p,self.q))
-        auxpp = np.zeros((self.p,self.p))
+        auxqq = np.zeros((self.q,self.q), dtype=np.float32)
+        auxqp = np.zeros((self.q,self.p), dtype=np.float32)
+        auxpq = np.zeros((self.p,self.q), dtype=np.float32)
+        auxpp = np.zeros((self.p,self.p), dtype=np.float32)
 
         for i in range(self.q):
 
@@ -299,12 +309,22 @@ class ErrorCovarianceMatrix:
 
                 self.setpp(i,j,auxpp[i,j])
 
+spec_state_vector = [
+    ('xq', float32[:]),
+    ('xp', float32[:]),
+    ('p', int32),
+    ('q', int32),
+    ('op', int32),
+    ('oq', int32),
+]
+
+@jitclass(spec_state_vector)
 class StateVector:
 
     def __init__(self,p,q):
 
-        self.xq = np.zeros((q,1))
-        self.xp = np.zeros((p,1))
+        self.xq = np.zeros((q,), dtype=np.float32)
+        self.xp = np.zeros((p,), dtype=np.float32)
 
         self.q = q
         self.p = p
@@ -378,7 +398,7 @@ class StateVector:
 
     def get(self):
 
-        x = np.zeros((self.p+self.q,1))
+        x = np.zeros((self.p+self.q,1), dtype=np.float32)
 
         for i in range(self.q):
 
@@ -390,6 +410,20 @@ class StateVector:
 
         return x
 
+error_covariance_matrix_type = deferred_type()
+error_covariance_matrix_type.define(ErrorCovarianceMatrix.class_type.instance_type)
+
+state_vector_type = deferred_type()
+state_vector_type.define(StateVector.class_type.instance_type)
+
+spec_stp_kalman = [
+    ('p', int32),
+    ('q', int32),
+    ('ecm', error_covariance_matrix_type),
+    ('sv', state_vector_type),
+]
+
+@jitclass(spec_stp_kalman)
 class STPKalman:
 
     def __init__(self, p=10, q=1):
@@ -407,6 +441,11 @@ class STPKalman:
         :return: filtered state vector, first q elements for noise and next p elements for speech
         """
 
+        asp = asp.astype(np.float32)
+        ans = ans.astype(np.float32)
+        sig_s = np.float32(sig_s)
+        sig_n = np.float32(sig_n)
+
         self.sv.predictor(asp,ans)
         self.ecm.predictor(asp,ans,sig_s,sig_n)
         G = self.ecm.gain()
@@ -415,119 +454,31 @@ class STPKalman:
 
         return self.sv.getp(0)
 
+SAMPLING_RATE = 16000 # sampling rate of the project in Hz
+
 if __name__ == "__main__":
 
-    Fs = np.zeros((3,3))
-    Fs[:2,1:] = np.eye(2,2)
-    ans = np.random.randn(3)
-    Fs[2,:] = -ans
+    fbe.clear_output_directory()
 
-    Fn = np.zeros((3,3))
-    Fn[:2, 1:] = np.eye(2,2)
-    asp = np.random.randn(3)
-    Fn[2, :] = -asp
-
-    F = np.zeros((6,6))
-    F[:3,:3] = Fs
-    F[3:,3:] = Fn
-
-    Q = np.zeros((6,6))
-
-    Q[2,2] = 0.1**2
-
-    Q[5,5] = 0.2**2
-
-    K = np.zeros((6,1))
-
-    K[2,0] = 1
-    K[5,0] = 1
-
-    C = np.random.randn(6,6)
-
-    ecm = ErrorCovarianceMatrix(3, 3)
-
-    ecm.setC(C)
-
-    CX = F.dot(C).dot(F.T) + Q
-
-    ecm.predictor(asp, ans, 0.2, 0.1)
-
-    CC = ecm.get()
-
-    print "after predictor"
-
-    print CX-CC
-
-    G = CX.dot(K)/(K.T.dot(CX).dot(K))
-
-    GG = ecm.gain()
-
-    print "gain"
-
-    print G-GG
-
-    CX = CX-G.dot(K.T).dot(CX)
-
-    ecm.update(GG)
-
-    print "after update"
-
-    print CX-ecm.get()
-
-    x = np.random.randn(6,1)
-
-    sv = StateVector(3, 3)
-
-    sv.setX(x)
-
-
-
-
-
-    Fx = F.dot(x)
-
-    sv.predictor(asp, ans)
-
-    print "x after predictor"
-    print Fx-sv.get()
-    sv.update(GG, 1.23)
-    print "x after update"
-    print Fx+G*(1.23-Fx[2,0]-Fx[5,0])-sv.get()
-
-    raw_input()
-
-
-
-
-
-
-
-
-
-
-
-
-    s, sr = fbe.load_wave("/home/data/morgenstern/speech_database/michal_sound_mono_without_instr_2_74.wav",tsr=8000)
-    n, sr = fbe.load_wave("/home/data/morgenstern/Noise_Recordings/cafeteria_babble.wav",tsr=8000)
+    s, sr = fbe.load_wav("../data/input/speech.wav")
+    n, sr = fbe.load_wav("../data/input/noise.wav")
 
     n = n[:len(s)]
 
-    SNR = 10.
+    SNR = 10. # signal to noise ratio for the noisy file
 
     n *= (np.linalg.norm(s)**2/np.linalg.norm(n)**2/10**(SNR/10.))**.5
 
-    r = s + n
-
-    print "SNR: ", 10*np.log10(np.linalg.norm(s)**2/np.linalg.norm( n*(np.linalg.norm(s)**2/np.linalg.norm(n)**2/10**(SNR/10.))**.5)**2)
+    r = s + n # mix speech and noise
 
     start = 0
-    frame = 200
+    frame = 320 # length of the signal frame
 
-    p=10
-    q=4
+    p=16 # speech autoregressive model order
+    q=1 # noise autoregressive model order
 
-    fbes = fbe.fbe(frame=frame,ar_order=p,sr=8000)
-    fben = fbe.fbe(frame=frame,ar_order=q,sr=8000)
+    fbes = fbe.Utils(p)
+    fben = fbe.Utils(q)
 
     kl = STPKalman(p,q)
 
@@ -551,8 +502,9 @@ if __name__ == "__main__":
             e[start + i] = kl.step(fr[i],asp[::-1],ans[::-1],sig_s,sig_n)
 
         start += frame
-
-    fbe.save_wave("test_stp.wav",e,sr=8000)
+    
+    fbe.save_wav(r,SAMPLING_RATE,"../data/output/noisy.wav")
+    fbe.save_wav(e,SAMPLING_RATE,"../data/output/output.wav")
 
 
 
