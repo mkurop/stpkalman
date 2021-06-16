@@ -3,12 +3,8 @@
 import os
 from setuptools import setup
 
-# Utility function to read the README file.
-# Used for the long_description.  It's nice, because now 1) we have a top level
-# README file and 2) it's easier to type in the README file than to put a raw
-# string in below ...
-def read(fname):
-    return open(os.path.join(os.path.dirname(__file__), fname)).read(
+with open("README.md","r", encoding="utf-8") as fh:
+    long_description = fh.read()
 
 setup(
     name = "extended-kalman-filter",
@@ -18,5 +14,7 @@ setup(
     description = ("Fast implementation of the extended Kalman filter with STP modelling of speech and noise processes."),
     license = "GNU 3.0",
     packages = ["kalman"],
-    #  long_desription = read('README.md'),
+    package_dir={"":"kalman"},
+    long_description_content_type="text/markdown",
+    long_description=long_description,
 )
