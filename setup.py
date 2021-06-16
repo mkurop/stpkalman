@@ -11,7 +11,7 @@ def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read(
 
 setup(
-    name = "extended-kalman-filter"),
+    name = "extended-kalman-filter",
     version = "1.0.0",
     author = "Marcin Kuropatwiński",
     author_email = "marcin@talking2rabbit.com",
@@ -19,5 +19,5 @@ setup(
     license = "GNU 3.0",
     packages = ["kalman"],
     long_desription = read('README.md'),
-    )
+)
 
