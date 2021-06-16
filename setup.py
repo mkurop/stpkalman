@@ -14,7 +14,6 @@ setup(
     description = ("Fast implementation of the extended Kalman filter with STP modelling of speech and noise processes."),
     license = "GNU 3.0",
     packages = ["kalman"],
-    package_dir={"":"kalman"},
     long_description_content_type="text/markdown",
     long_description=long_description,
 )
