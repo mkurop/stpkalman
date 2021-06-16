@@ -2,6 +2,7 @@ import numpy as np
 import os
 import sys
 
+sys.path.append(".")
 import utils as fbe
 from numba import int32, float32, deferred_type
 from numba.experimental import jitclass
@@ -436,7 +437,7 @@ class STPKalman:
 
     def step(self,rt,asp,ans,sig_s,sig_n):
         """
-        :param asp: STP speech parameters, the analyzing polynomial: 1+asp[0]*z**-1+...+asp[p-1]*z**-p
+        :param asp: STP speech parameters, the analyzing polynomial: 1+asp[p-1]*z**-1+...+asp[0]*z**-p
         :param ans: STP noise parameters, analyzing polynomia analogously
         :return: filtered state vector, first q elements for noise and next p elements for speech
         """
