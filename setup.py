@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
+import os
 from setuptools import setup
 
 # Utility function to read the README file.
@@ -11,7 +11,7 @@ def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read(
 
 setup(
-    name = "Kalman filter with STP parameters for speech and noise"),
+    name = "extended-kalman-filter"),
     version = "1.0.0",
     author = "Marcin Kuropatwiński",
     author_email = "marcin@talking2rabbit.com",
