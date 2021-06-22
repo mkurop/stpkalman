@@ -2,8 +2,9 @@ import numpy as np
 import os
 import sys
 
-sys.path.append(".")
-import utils as fbe
+#  sys.path.append(".")
+#  import utils as fbe
+import kalman.utils as fbe
 from numba import int32, float32, deferred_type
 from numba.experimental import jitclass
   
