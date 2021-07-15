@@ -400,15 +400,15 @@ class StateVector:
 
     def get(self):
 
-        x = np.zeros((self.p+self.q,1), dtype=np.float32)
+        x = np.zeros((self.p+self.q,), dtype=np.float32)
 
         for i in range(self.q):
 
-            x[i,0] = self.getq(i)
+            x[i] = self.getq(i)
 
         for i in range(self.p):
 
-            x[self.q+i,0] = self.getp(i)
+            x[self.q+i] = self.getp(i)
 
         return x
 
